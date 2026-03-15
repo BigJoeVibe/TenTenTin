@@ -691,8 +691,7 @@ function moveDrag(x, y) {
   if (!dragBlock) return;
   dragPos = {x, y};
   const ghost = document.getElementById('drag-ghost');
-  ghost.style.left = x + 'px';
-  ghost.style.top = y + 'px';
+  positionGhost(ghost, x, y);
   clearHighlights();
   const {r, c} = getPlacementFromPoint(x, y, dragBlock);
   if (r !== null && c !== null) {
@@ -732,6 +731,9 @@ function endDrag(x, y) {
   }
 }
 
+// Detect touch device
+const isTouchDevice = () => window.matchMedia('(pointer: coarse)').matches;
+
 function showGhost(x, y) {
   const ghost = document.getElementById('drag-ghost');
   const gPreview = document.getElementById('ghost-preview');
@@ -740,12 +742,24 @@ function showGhost(x, y) {
   // Match ghost cell size to actual board cell size
   const board = document.getElementById('board');
   const rect = board.getBoundingClientRect();
-  const cellSize = Math.floor(rect.width / GRID) - 3; // subtract gap
+  const cellSize = Math.floor(rect.width / GRID) - 3;
 
   gPreview.appendChild(buildBlockPreview(dragBlock, cellSize));
   ghost.style.display = 'block';
+  positionGhost(ghost, x, y);
+}
+
+function positionGhost(ghost, x, y) {
   ghost.style.left = x + 'px';
-  ghost.style.top = y + 'px';
+  if (isTouchDevice()) {
+    // On mobile: shift ghost above finger so placement is visible
+    const board = document.getElementById('board');
+    const cellSize = Math.floor(board.getBoundingClientRect().width / GRID);
+    const maxR = Math.max(...dragBlock.shape.map(s => s[0])) + 1;
+    ghost.style.top = (y - cellSize * maxR * 0.9) + 'px';
+  } else {
+    ghost.style.top = y + 'px';
+  }
 }
 
 function getCellFromPoint(x, y) {
