@@ -734,32 +734,33 @@ function endDrag(x, y) {
 // Detect touch device
 const isTouchDevice = () => window.matchMedia('(pointer: coarse)').matches;
 
+// Returns adjusted Y so ghost appears above finger on touch, same on mouse
+function getEffectiveY(y, block) {
+  if (!isTouchDevice()) return y;
+  const board = document.getElementById('board');
+  const cellSize = Math.floor(board.getBoundingClientRect().width / GRID);
+  const maxR = Math.max(...block.shape.map(s => s[0])) + 1;
+  return y - cellSize * maxR * 0.9;
+}
+
 function showGhost(x, y) {
   const ghost = document.getElementById('drag-ghost');
   const gPreview = document.getElementById('ghost-preview');
   gPreview.innerHTML = '';
 
-  // Match ghost cell size to actual board cell size
   const board = document.getElementById('board');
   const rect = board.getBoundingClientRect();
   const cellSize = Math.floor(rect.width / GRID) - 3;
 
   gPreview.appendChild(buildBlockPreview(dragBlock, cellSize));
   ghost.style.display = 'block';
-  positionGhost(ghost, x, y);
+  ghost.style.left = x + 'px';
+  ghost.style.top = getEffectiveY(y, dragBlock) + 'px';
 }
 
 function positionGhost(ghost, x, y) {
   ghost.style.left = x + 'px';
-  if (isTouchDevice()) {
-    // On mobile: shift ghost above finger so placement is visible
-    const board = document.getElementById('board');
-    const cellSize = Math.floor(board.getBoundingClientRect().width / GRID);
-    const maxR = Math.max(...dragBlock.shape.map(s => s[0])) + 1;
-    ghost.style.top = (y - cellSize * maxR * 0.9) + 'px';
-  } else {
-    ghost.style.top = y + 'px';
-  }
+  ghost.style.top = getEffectiveY(y, dragBlock) + 'px';
 }
 
 function getCellFromPoint(x, y) {
@@ -783,14 +784,14 @@ function getPlacementFromPoint(x, y, block) {
   const maxR = Math.max(...block.shape.map(s => s[0]));
   const maxC = Math.max(...block.shape.map(s => s[1]));
 
-  // Offset so cursor is at center of block
+  // On mobile use adjusted Y (same as ghost position), on PC center the block
+  const effectiveY = getEffectiveY(y, block);
   const offsetX = (maxC / 2) * cellW;
   const offsetY = (maxR / 2) * cellH;
 
   const c = Math.floor((x - rect.left - offsetX) / cellW);
-  const r = Math.floor((y - rect.top - offsetY) / cellH);
+  const r = Math.floor((effectiveY - rect.top - offsetY) / cellH);
 
-  // Must be inside board bounds (accounting for block size)
   if (r < 0 || r + maxR >= GRID || c < 0 || c + maxC >= GRID) return {r: null, c: null};
   return {r, c};
 }
