@@ -17,7 +17,7 @@
     --c-green: #00c853;
     --c-blue: #2979ff;
     --c-red: #ff1744;
-    --c-purple: #d500f9;
+    --c-purple: #bf80ff;
     --text: #e2e8f0;
     --text-dim: #64748b;
     --accent: #06d6a0;
@@ -234,7 +234,7 @@
 
   /* ROUND INFO */
   #round-info {
-    font-size: 0.75rem; color: var(--text-dim);
+    font-size: 1.1rem; color: var(--text-dim);
     letter-spacing: 1px;
     text-align: center;
   }
@@ -381,21 +381,18 @@
 <!-- TRASH MODE INDICATOR -->
 <div class="trash-indicator" id="trash-indicator">🗑 Click a tile color to remove ALL of that color</div>
 
-<!-- ROUND FLASH -->
-<div class="round-flash" id="round-flash"></div>
-
 <!-- GAME -->
 <div id="game-wrap">
   <!-- TOP BAR -->
   <div id="top-bar">
     <div class="score-box">
-      <div class="score-label">Score</div>
-      <div class="score-val" id="score-display">0</div>
+      <div class="score-label">Best</div>
+      <div class="score-val best" id="best-display">0</div>
     </div>
     <button id="pause-btn">⏸</button>
     <div class="score-box">
-      <div class="score-label">Best</div>
-      <div class="score-val best" id="best-display">0</div>
+      <div class="score-label">Score</div>
+      <div class="score-val" id="score-display">0</div>
     </div>
   </div>
 
@@ -407,7 +404,15 @@
     </div>
     <div id="round-info">Round <span id="round-num">1</span> &nbsp;|&nbsp; Move <span id="move-num">1</span>/3</div>
     <div class="cd-item">
-      <div class="cd-btn locked" id="trash-btn" title="Remove all tiles of one color">🗑</div>
+      <div class="cd-btn locked" id="trash-btn" title="Remove all tiles of one color">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3,5 4,5 14,5"/>
+          <line x1="6" y1="5" x2="6" y2="3"/>
+          <line x1="12" y1="5" x2="12" y2="3"/>
+          <line x1="6" y1="3" x2="12" y2="3"/>
+          <path d="M4.5 5.5 L5.5 15.5 L12.5 15.5 L13.5 5.5"/>
+        </svg>
+      </div>
       <div class="cd-counter" id="trash-cd">TRASH</div>
     </div>
   </div>
@@ -431,7 +436,7 @@ const COLORS = {
   green:  '#00c853',
   blue:   '#2979ff',
   red:    '#ff1744',
-  purple: '#d500f9',
+  purple: '#bf80ff',
 };
 const COLOR_KEYS = Object.keys(COLORS);
 
@@ -482,6 +487,7 @@ let paused = false;
 // INIT
 // ============================================================
 function initGame() {
+  clearSavedState();
   grid = Array.from({length: GRID}, () => Array(GRID).fill(null));
   score = 0;
   round = 1;
@@ -541,11 +547,12 @@ function generateBlocks() {
 
 function generateOneBlock() {
   const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
-  // Decide: single color or multi-color
-  const multiColor = Math.random() < 0.35 && shape.length > 1;
   let colors;
   let attempts = 0;
+
   do {
+    // Decide single or multi color fresh each attempt
+    const multiColor = Math.random() < 0.35 && shape.length > 1;
     if (multiColor) {
       const c1 = randomColor();
       colors = shape.map(() => Math.random() < 0.5 ? c1 : randomColor());
@@ -554,10 +561,11 @@ function generateOneBlock() {
       colors = shape.map(() => c);
     }
     attempts++;
-    // Safety: after 20 attempts just force multicolor with all different
-    if (attempts > 20) {
+    if (attempts > 50) {
+      // Force every cell a different color as last resort
       colors = shape.map(() => randomColor());
-      break;
+      // Keep retrying until safe
+      if (!blockWouldSelfClear(shape, colors)) break;
     }
   } while (blockWouldSelfClear(shape, colors));
 
@@ -740,7 +748,9 @@ function getEffectiveY(y, block) {
   const board = document.getElementById('board');
   const cellSize = Math.floor(board.getBoundingClientRect().width / GRID);
   const maxR = Math.max(...block.shape.map(s => s[0])) + 1;
-  return y - cellSize * maxR * 0.9;
+  // Flat blocks (1 row tall) get extra offset so they don't hide under finger
+  const extraRows = maxR <= 1 ? 2 : 0.9;
+  return y - cellSize * (maxR + extraRows);
 }
 
 function showGhost(x, y) {
@@ -792,7 +802,7 @@ function getPlacementFromPoint(x, y, block) {
   const c = Math.floor((x - rect.left - offsetX) / cellW);
   const r = Math.floor((effectiveY - rect.top - offsetY) / cellH);
 
-  if (r < 0 || r + maxR >= GRID || c < 0 || c + maxC >= GRID) return {r: null, c: null};
+  if (r < 0 || r + maxR > GRID - 1 || c < 0 || c + maxC > GRID - 1) return {r: null, c: null};
   return {r, c};
 }
 
@@ -828,7 +838,9 @@ function clearHighlights() {
 function canPlace(r, c, shape) {
   return shape.every(([dr, dc]) => {
     const nr = r + dr, nc = c + dc;
-    return nr >= 0 && nr < GRID && nc >= 0 && nc < GRID && !grid[nr][nc];
+    if (nr < 0 || nr >= GRID || nc < 0 || nc >= GRID) return false;
+    if (!grid[nr]) return false;
+    return !grid[nr][nc];
   });
 }
 
@@ -890,11 +902,11 @@ function placeBlock(r, c, block) {
     moveInRound = 0;
     round++;
     generateBlocks();
-    showRoundFlash('Round ' + round);
   }
 
   renderBlocks();
   updateRoundInfo();
+  saveState();
 
   // Check game over
   if (!hasAnyMove()) {
@@ -1039,6 +1051,7 @@ function hasAnyMove() {
 
 function showGameOver() {
   gameActive = false;
+  clearSavedState();
   if (score > best) {
     best = score;
     localStorage.setItem('cmBest', best);
@@ -1165,9 +1178,61 @@ document.getElementById('btn-go-newgame').addEventListener('click', () => {
 });
 
 // ============================================================
+// SAVE / RESTORE (survives app switching on mobile)
+// ============================================================
+function saveState() {
+  try {
+    const state = {
+      grid, blocks, score, round, moveInRound,
+      undoCooldown, trashCooldown
+    };
+    localStorage.setItem('cmState', JSON.stringify(state));
+  } catch(e) {}
+}
+
+function clearSavedState() {
+  localStorage.removeItem('cmState');
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem('cmState');
+    if (!raw) return false;
+    const s = JSON.parse(raw);
+    // Basic validation
+    if (!s.grid || !s.blocks || s.grid.length !== GRID) return false;
+    grid = s.grid;
+    blocks = s.blocks;
+    score = s.score || 0;
+    round = s.round || 1;
+    moveInRound = s.moveInRound || 0;
+    undoCooldown = s.undoCooldown || 0;
+    trashCooldown = s.trashCooldown || 0;
+    undoState = null;
+    trashMode = false;
+    dragBlock = null;
+    gameActive = true;
+    paused = false;
+    return true;
+  } catch(e) {
+    return false;
+  }
+}
+
+// ============================================================
 // INIT DISPLAY
 // ============================================================
 updateBestDisplay();
+
+// Try to restore saved game on page load
+if (loadState()) {
+  document.getElementById('menu-overlay').style.display = 'none';
+  updateScore();
+  renderBoard();
+  renderBlocks();
+  updateCooldownUI();
+  updateRoundInfo();
+} 
 </script>
 </body>
 </html>
