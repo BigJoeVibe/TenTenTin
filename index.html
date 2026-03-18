@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TenTenTin</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2306d6a0'/><text x='16' y='22' text-anchor='middle' font-family='Arial Black,Arial,sans-serif' font-weight='900' font-size='16' fill='%230d1b2a'>10</text></svg>">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600&display=swap');
 
@@ -31,10 +32,11 @@
     color: var(--text);
     font-family: 'Exo 2', sans-serif;
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     overflow: hidden;
     background-image: radial-gradient(ellipse at 20% 50%, rgba(6,214,160,0.05) 0%, transparent 60%),
                       radial-gradient(ellipse at 80% 20%, rgba(78,205,196,0.05) 0%, transparent 60%);
@@ -86,8 +88,8 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
-    padding: 12px;
+    gap: 8px;
+    padding: 8px 12px 12px;
     width: 100%;
     max-width: 520px;
   }
@@ -389,7 +391,12 @@
       <div class="score-label">Best</div>
       <div class="score-val best" id="best-display">0</div>
     </div>
-    <button id="pause-btn">⏸</button>
+    <button id="pause-btn" title="Pause">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+        <rect x="2" y="2" width="4" height="12" rx="1"/>
+        <rect x="10" y="2" width="4" height="12" rx="1"/>
+      </svg>
+    </button>
     <div class="score-box">
       <div class="score-label">Score</div>
       <div class="score-val" id="score-display">0</div>
@@ -399,7 +406,12 @@
   <!-- COOLDOWNS -->
   <div id="cooldowns">
     <div class="cd-item">
-      <div class="cd-btn locked" id="undo-btn" title="Undo last move">↩</div>
+      <div class="cd-btn locked" id="undo-btn" title="Undo last move">
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3,9 3,4 8,4"/>
+          <path d="M3 4 Q9 1 14 6 Q17 9 14 13 Q11 17 6 15"/>
+        </svg>
+      </div>
       <div class="cd-counter" id="undo-cd">UNDO</div>
     </div>
     <div id="round-info">Round <span id="round-num">1</span> &nbsp;|&nbsp; Move <span id="move-num">1</span>/3</div>
@@ -463,6 +475,21 @@ const SHAPES = [
   // T/cross small
   [[0,0],[0,1],[0,2],[1,1]],
   [[0,0],[1,0],[1,1],[2,0]],
+  // 4-cell line
+  [[0,0],[0,1],[0,2],[0,3]],
+  [[0,0],[1,0],[2,0],[3,0]],
+  // A: 3↕ + 2→ dole
+  [[0,0],[1,0],[2,0],[2,1],[2,2]],
+  // B: 3↕ + 2← dole (mirror A)
+  [[0,2],[1,2],[2,0],[2,1],[2,2]],
+  // C: 3↕ + 2→ nahoře
+  [[0,0],[0,1],[0,2],[1,0],[2,0]],
+  // D: 3↕ + 2← nahoře (mirror C)
+  [[0,0],[0,1],[0,2],[1,2],[2,2]],
+  // T velké – vodorovné (5 kamenů)
+  [[0,0],[0,1],[0,2],[1,1],[2,1]],
+  // T velké – otočené (5 kamenů)
+  [[0,0],[1,0],[1,1],[1,2],[2,0]],
 ];
 
 // ============================================================
@@ -928,16 +955,20 @@ function animatePlacements(cells) {
 // GROUP DETECTION (flood fill, same color, min 3)
 // ============================================================
 function findAndRemoveGroups() {
-  const visited = Array.from({length:GRID}, () => Array(GRID).fill(false));
   const toRemove = [];
+  // Track which cells are already queued for removal
+  const markedForRemoval = Array.from({length:GRID}, () => Array(GRID).fill(false));
 
   for (let r = 0; r < GRID; r++) {
     for (let c = 0; c < GRID; c++) {
-      if (grid[r][c] && !visited[r][c]) {
+      if (grid[r][c] && !markedForRemoval[r][c]) {
         const color = grid[r][c];
+        // Fresh visited for each new group search
+        const visited = Array.from({length:GRID}, () => Array(GRID).fill(false));
         const group = [];
         floodFill(r, c, color, visited, group);
         if (group.length >= 3) {
+          group.forEach(({r,c}) => { markedForRemoval[r][c] = true; });
           toRemove.push(...group);
         }
       }
@@ -945,7 +976,6 @@ function findAndRemoveGroups() {
   }
 
   if (toRemove.length > 0) {
-    // Animate removal
     toRemove.forEach(({r,c}) => {
       const cell = getCell(r,c);
       if (cell) cell.classList.add('pop');
