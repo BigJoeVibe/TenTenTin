@@ -573,7 +573,17 @@ function generateBlocks() {
 }
 
 function generateOneBlock() {
-  const shape = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+  // Weighted selection - larger blocks are rarer
+  // Weight = 1 / (cells^1.5) normalized
+  const weights = SHAPES.map(s => 1 / Math.pow(s.length, 1.5));
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  let rand = Math.random() * totalWeight;
+  let shapeIdx = 0;
+  for (let i = 0; i < weights.length; i++) {
+    rand -= weights[i];
+    if (rand <= 0) { shapeIdx = i; break; }
+  }
+  const shape = SHAPES[shapeIdx];
   let colors;
   let attempts = 0;
 
@@ -935,10 +945,10 @@ function placeBlock(r, c, block) {
   updateRoundInfo();
   saveState();
 
-  // Check game over
-  if (!hasAnyMove()) {
-    setTimeout(showGameOver, 400);
-  }
+  // Check game over AFTER removal animation completes (350ms)
+  setTimeout(() => {
+    if (!hasAnyMove()) showGameOver();
+  }, 400);
 }
 
 function animatePlacements(cells) {
