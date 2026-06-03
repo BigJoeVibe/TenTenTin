@@ -371,7 +371,8 @@
     <p>No more moves possible!</p>
     <div id="go-score">0</div>
     <p id="go-best-msg" style="color:var(--accent)"></p>
-    <button class="menu-btn btn-play" id="btn-go-newgame" style="margin-top:8px">▶ Play Again</button>
+    <button class="menu-btn btn-continue" id="btn-go-undo" style="margin-top:8px">↩ Zpět (vrátit poslední tah)</button>
+    <button class="menu-btn btn-play" id="btn-go-newgame">▶ Play Again</button>
   </div>
 </div>
 
@@ -565,30 +566,57 @@ function getCell(r, c) {
 // ============================================================
 // BLOCK GENERATION
 // ============================================================
-function generateBlocks() {
-  blocks = [];
-  for (let i = 0; i < 3; i++) {
-    blocks.push(generateOneBlock());
-  }
+// How full is the board right now (0..1)
+function fillRatioOf(g) {
+  let n = 0;
+  for (let r = 0; r < GRID; r++)
+    for (let c = 0; c < GRID; c++)
+      if (g[r][c]) n++;
+  return n / (GRID * GRID);
 }
 
-function generateOneBlock() {
-  // Weighted selection - larger blocks are rarer
-  // Weight = 1 / (cells^1.5) normalized
-  const weights = SHAPES.map(s => 1 / Math.pow(s.length, 1.5));
-  const totalWeight = weights.reduce((a, b) => a + b, 0);
-  let rand = Math.random() * totalWeight;
-  let shapeIdx = 0;
-  for (let i = 0; i < weights.length; i++) {
-    rand -= weights[i];
-    if (rand <= 0) { shapeIdx = i; break; }
-  }
-  const shape = SHAPES[shapeIdx];
-  let colors;
-  let attempts = 0;
-
+function generateBlocks() {
+  // Generate against the CURRENT (already cleared) board so block sizing
+  // and playability checks reflect reality.
+  const fr = fillRatioOf(grid);
+  const snapshot = grid.map(row => [...row]);
+  let candidate, tries = 0;
   do {
-    // Decide single or multi color fresh each attempt
+    candidate = [
+      generateOneBlock(fr),
+      generateOneBlock(fr),
+      generateOneBlock(fr),
+    ];
+    tries++;
+  } while (!roundIsPlayable(snapshot, candidate) && tries < 80);
+  blocks = candidate;
+}
+
+function generateOneBlock(fillRatio) {
+  fillRatio = fillRatio || 0;
+
+  // Fuller board -> smaller blocks. Hard cap on size + steeper rarity curve.
+  let maxCells = 5;
+  if (fillRatio >= 0.85) maxCells = 2;
+  else if (fillRatio >= 0.70) maxCells = 3;
+  else if (fillRatio >= 0.55) maxCells = 4;
+  const allowed = SHAPES.filter(s => s.length <= maxCells);
+  const exp = 1.5 + 3 * fillRatio;          // 1.5 (empty) .. ~4.5 (full)
+  const weights = allowed.map(s => 1 / Math.pow(s.length, exp));
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+
+  function pickShape() {
+    let rand = Math.random() * totalWeight;
+    for (let i = 0; i < weights.length; i++) {
+      rand -= weights[i];
+      if (rand <= 0) return allowed[i];
+    }
+    return allowed[allowed.length - 1];
+  }
+
+  let shape, colors, attempts = 0;
+  do {
+    shape = pickShape();
     const multiColor = Math.random() < 0.35 && shape.length > 1;
     if (multiColor) {
       const c1 = randomColor();
@@ -598,15 +626,21 @@ function generateOneBlock() {
       colors = shape.map(() => c);
     }
     attempts++;
-    if (attempts > 50) {
-      // Force every cell a different color as last resort
-      colors = shape.map(() => randomColor());
-      // Keep retrying until safe
-      if (!blockWouldSelfClear(shape, colors)) break;
-    }
-  } while (blockWouldSelfClear(shape, colors));
+  } while (blockWouldSelfClear(shape, colors) && attempts < 60);
+
+  // Hard guarantee: if random coloring still self-clears, use a checkerboard
+  // (no two orthogonally-adjacent cells share a color => never self-clears).
+  if (blockWouldSelfClear(shape, colors)) colors = safeColors(shape);
 
   return { shape, colors, used: false };
+}
+
+// Checkerboard coloring -> guaranteed no same-color adjacency -> no self-clear
+function safeColors(shape) {
+  const c0 = randomColor();
+  let c1 = randomColor();
+  while (c1 === c0) c1 = randomColor();
+  return shape.map(([r, c]) => ((r + c) % 2 === 0) ? c0 : c1);
 }
 
 // Check if block alone would trigger a 3+ group (flood fill on itself)
@@ -645,6 +679,84 @@ function floodFillTemp(r, c, color, visited, group, tempGrid, rows, cols) {
 
 function randomColor() {
   return COLOR_KEYS[Math.floor(Math.random() * COLOR_KEYS.length)];
+}
+
+// ============================================================
+// SIMULATION HELPERS (used to guarantee a playable round - Var 3)
+// Operate on a passed-in grid, never touch the live board/DOM.
+// ============================================================
+function canPlaceOn(g, r, c, shape) {
+  return shape.every(([dr, dc]) => {
+    const nr = r + dr, nc = c + dc;
+    if (nr < 0 || nr >= GRID || nc < 0 || nc >= GRID) return false;
+    if (!g[nr]) return false;
+    return !g[nr][nc];
+  });
+}
+
+// Iterative flood fill (avoids deep recursion when simulating)
+function floodCollect(g, sr, sc, color, visited, group) {
+  const stack = [[sr, sc]];
+  while (stack.length) {
+    const [r, c] = stack.pop();
+    if (r < 0 || r >= GRID || c < 0 || c >= GRID) continue;
+    if (visited[r][c]) continue;
+    if (g[r][c] !== color) continue;
+    visited[r][c] = true;
+    group.push({ r, c });
+    stack.push([r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]);
+  }
+}
+
+// Return a NEW grid with all connected same-color groups of 3+ removed
+function simClear(g) {
+  const ng = g.map(row => [...row]);
+  const marked = Array.from({ length: GRID }, () => Array(GRID).fill(false));
+  for (let r = 0; r < GRID; r++) {
+    for (let c = 0; c < GRID; c++) {
+      if (ng[r][c] && !marked[r][c]) {
+        const color = ng[r][c];
+        const visited = Array.from({ length: GRID }, () => Array(GRID).fill(false));
+        const group = [];
+        floodCollect(ng, r, c, color, visited, group);
+        if (group.length >= 3) group.forEach(p => { marked[p.r][p.c] = true; });
+      }
+    }
+  }
+  for (let r = 0; r < GRID; r++)
+    for (let c = 0; c < GRID; c++)
+      if (marked[r][c]) ng[r][c] = null;
+  return ng;
+}
+
+// Can all 3 blocks be placed (in SOME order, accounting for clears between)?
+function roundIsPlayable(startGrid, blks) {
+  const used = [false, false, false];
+  let nodes = 0;
+  function rec(g, placed) {
+    if (placed === 3) return true;
+    for (let i = 0; i < 3; i++) {
+      if (used[i]) continue;
+      const shape = blks[i].shape;
+      const maxR = Math.max(...shape.map(s => s[0]));
+      const maxC = Math.max(...shape.map(s => s[1]));
+      for (let r = 0; r + maxR < GRID; r++) {
+        for (let c = 0; c + maxC < GRID; c++) {
+          if (++nodes > 20000) return true; // safety cap: accept rather than hang
+          if (canPlaceOn(g, r, c, shape)) {
+            const ng = g.map(row => [...row]);
+            shape.forEach(([dr, dc], k) => { ng[r + dr][c + dc] = blks[i].colors[k]; });
+            const cleared = simClear(ng);
+            used[i] = true;
+            if (rec(cleared, placed + 1)) { used[i] = false; return true; }
+            used[i] = false;
+          }
+        }
+      }
+    }
+    return false;
+  }
+  return rec(startGrid, 0);
 }
 
 // ============================================================
@@ -913,21 +1025,22 @@ function placeBlock(r, c, block) {
   // Score for placed tiles
   score += block.shape.length;
 
-  // Find and remove color groups
+  // Show the placed block FIRST, then resolve clears on top of it. renderBoard
+  // rebuilds the DOM, so it must run before findAndRemoveGroups adds the 'pop'
+  // class - otherwise the clear animation would be wiped out instantly.
+  renderBoard();
+  animatePlacements(block.shape.map(([dr,dc]) => ({r: r+dr, c: c+dc})));
+
+  // Find and remove color groups (clears grid data immediately)
   const removed = findAndRemoveGroups();
   if (removed.length > 0) {
     score += removed.length;
-    // Bonus for multiple colors at once
-    const colorSet = new Set(removed.map(({r,c}) => grid[r] && grid[r][c]).filter(Boolean));
-    // (already removed, count unique colors cleared)
+    // Bonus for clearing multiple colors at once
+    const colorSet = new Set(removed.map(x => x.color));
     score += (colorSet.size - 1) * 3;
   }
 
   updateScore();
-
-  // Animate board
-  renderBoard();
-  animatePlacements(block.shape.map(([dr,dc]) => ({r: r+dr, c: c+dc})));
 
   // Cooldown tracking
   if (undoCooldown > 0) undoCooldown--;
@@ -978,22 +1091,27 @@ function findAndRemoveGroups() {
         const group = [];
         floodFill(r, c, color, visited, group);
         if (group.length >= 3) {
-          group.forEach(({r,c}) => { markedForRemoval[r][c] = true; });
-          toRemove.push(...group);
+          group.forEach(({r,c}) => {
+            markedForRemoval[r][c] = true;
+            toRemove.push({r, c, color}); // keep color for scoring
+          });
         }
       }
     }
   }
 
   if (toRemove.length > 0) {
+    // VISUAL: pop animation on the cells that are about to vanish.
     toRemove.forEach(({r,c}) => {
       const cell = getCell(r,c);
       if (cell) cell.classList.add('pop');
     });
-    setTimeout(() => {
-      toRemove.forEach(({r,c}) => { grid[r][c] = null; });
-      renderBoard();
-    }, 350);
+    // DATA: clear immediately so game state (and saveState) is always
+    // consistent. This fixes "unrelated tiles vanish later" caused by
+    // saving a board that still contained an about-to-clear group.
+    toRemove.forEach(({r,c}) => { grid[r][c] = null; });
+    // After the animation, re-render to show the now-empty cells.
+    setTimeout(() => { renderBoard(); }, 350);
   }
 
   return toRemove;
@@ -1014,16 +1132,15 @@ function floodFill(r, c, color, visited, group) {
 // ============================================================
 // UNDO
 // ============================================================
-document.getElementById('undo-btn').addEventListener('click', () => {
-  if (!gameActive || paused) return;
-  if (undoCooldown > 0) return;
-  if (!undoState) return;
+function performUndo(isRescue) {
+  if (!undoState) return false;
   grid = undoState.grid;
   score = undoState.score;
   blocks = undoState.blocks;
   moveInRound = undoState.moveInRound;
   round = undoState.round;
-  undoCooldown = undoState.undoCooldown + 10; // reset cooldown
+  // Normal undo costs a 10-move cooldown; a game-over rescue is free.
+  undoCooldown = isRescue ? undoState.undoCooldown : undoState.undoCooldown + 10;
   trashCooldown = undoState.trashCooldown;
   undoState = null;
   updateScore();
@@ -1031,6 +1148,25 @@ document.getElementById('undo-btn').addEventListener('click', () => {
   renderBlocks();
   updateCooldownUI();
   updateRoundInfo();
+  return true;
+}
+
+document.getElementById('undo-btn').addEventListener('click', () => {
+  if (!gameActive || paused) return;
+  if (undoCooldown > 0) return;
+  performUndo(false);
+});
+
+// Game-over rescue: always available (ignores cooldown), brings the game back.
+document.getElementById('btn-go-undo').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!undoState) return;
+  const overlay = document.getElementById('gameover-overlay');
+  overlay.classList.remove('show', 'show-panel');
+  gameActive = true;
+  paused = false;
+  performUndo(true);
+  saveState();
 });
 
 // ============================================================
@@ -1060,18 +1196,20 @@ function onTrashClick(e) {
       }
     }
   }
-  setTimeout(() => {
-    for (let rr = 0; rr < GRID; rr++) {
-      for (let cc = 0; cc < GRID; cc++) {
-        if (grid[rr][cc] === color) grid[rr][cc] = null;
-      }
+  // DATA: clear immediately (same consistency fix as group clears) so the
+  // saved state never contains tiles that are visually disappearing. The pop
+  // animation stays on the old DOM cells; re-render once it finishes.
+  for (let rr = 0; rr < GRID; rr++) {
+    for (let cc = 0; cc < GRID; cc++) {
+      if (grid[rr][cc] === color) grid[rr][cc] = null;
     }
-    renderBoard();
-  }, 350);
+  }
+  setTimeout(() => { renderBoard(); }, 350);
   trashMode = false;
   trashCooldown = 20;
   document.getElementById('trash-indicator').className = 'trash-indicator';
   updateCooldownUI();
+  saveState();
 }
 
 // ============================================================
@@ -1101,6 +1239,9 @@ function showGameOver() {
   }
   document.getElementById('go-score').textContent = score;
   updateBestDisplay();
+
+  // Show the rescue "Zpět" button only if there is a move to undo
+  document.getElementById('btn-go-undo').style.display = undoState ? 'block' : 'none';
 
   // Show just the bar first – board stays visible
   const overlay = document.getElementById('gameover-overlay');
