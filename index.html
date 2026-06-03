@@ -347,6 +347,19 @@
     .bp-cell { width: 14px; height: 14px; }
     #drag-ghost .bp-cell { width: 26px; height: 26px; }
   }
+
+  /* Discreet version tag */
+  #version-tag {
+    position: fixed;
+    bottom: 4px; right: 7px;
+    font-family: 'Orbitron', monospace;
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    opacity: 0.55;
+    letter-spacing: 1px;
+    pointer-events: none;
+    z-index: 50;
+  }
 </style>
 </head>
 <body>
@@ -383,6 +396,9 @@
 
 <!-- TRASH MODE INDICATOR -->
 <div class="trash-indicator" id="trash-indicator">🗑 Click a tile color to remove ALL of that color</div>
+
+<!-- VERSION TAG -->
+<div id="version-tag">v2</div>
 
 <!-- GAME -->
 <div id="game-wrap">
