@@ -398,7 +398,7 @@
 <div class="trash-indicator" id="trash-indicator">🗑 Click a tile color to remove ALL of that color</div>
 
 <!-- VERSION TAG -->
-<div id="version-tag">v2</div>
+<div id="version-tag">v3</div>
 
 <!-- GAME -->
 <div id="game-wrap">
@@ -507,6 +507,13 @@ const SHAPES = [
   [[0,0],[0,1],[0,2],[1,1],[2,1]],
   // T velké – otočené (5 kamenů)
   [[0,0],[1,0],[1,1],[1,2],[2,0]],
+  // --- Složitější tvary (5–6 kamenů) ---
+  [[0,1],[1,0],[1,1],[1,2],[2,1]],          // plus (5)
+  [[0,0],[0,2],[1,0],[1,1],[1,2]],          // U (5)
+  [[0,0],[0,1],[1,1],[1,2],[2,2]],          // velké Z (5)
+  [[0,2],[0,1],[1,1],[1,0],[2,0]],          // velké S (5)
+  [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2]],    // obdélník 2×3 (6)
+  [[0,0],[0,1],[1,0],[1,1],[2,0],[2,1]],    // obdélník 3×2 (6)
 ];
 
 // ============================================================
@@ -611,14 +618,19 @@ function generateBlocks() {
 function generateOneBlock(fillRatio) {
   fillRatio = fillRatio || 0;
 
-  // Fuller board -> smaller blocks. Hard cap on size + steeper rarity curve.
-  let maxCells = 5;
+  // EMPTIER board -> bigger & more colorful blocks (harder).
+  // FULLER board -> small blocks (keeps the round playable).
+  let maxCells = 6;
   if (fillRatio >= 0.85) maxCells = 2;
   else if (fillRatio >= 0.70) maxCells = 3;
   else if (fillRatio >= 0.55) maxCells = 4;
+  else if (fillRatio >= 0.35) maxCells = 5;
   const allowed = SHAPES.filter(s => s.length <= maxCells);
-  const exp = 1.5 + 3 * fillRatio;          // 1.5 (empty) .. ~4.5 (full)
-  const weights = allowed.map(s => 1 / Math.pow(s.length, exp));
+
+  // Size bias: on an empty board big blocks are favored (weight = size^2.5),
+  // as the board fills the curve flips to favor small blocks.
+  const exp = -2.5 + 6.0 * fillRatio;       // empty ~ -2.5, full ~ +2.6
+  const weights = allowed.map(s => Math.pow(s.length, -exp));
   const totalWeight = weights.reduce((a, b) => a + b, 0);
 
   function pickShape() {
@@ -630,13 +642,21 @@ function generateOneBlock(fillRatio) {
     return allowed[allowed.length - 1];
   }
 
+  // Color mix: emptier board -> more multi-color (and a richer 3-color palette).
+  const multiProb = 0.25 + 0.65 * (1 - fillRatio);  // empty ~0.9, full ~0.25
+
   let shape, colors, attempts = 0;
   do {
     shape = pickShape();
-    const multiColor = Math.random() < 0.35 && shape.length > 1;
+    const multiColor = Math.random() < multiProb && shape.length > 1;
     if (multiColor) {
-      const c1 = randomColor();
-      colors = shape.map(() => Math.random() < 0.5 ? c1 : randomColor());
+      const paletteSize = fillRatio < 0.4 ? 3 : 2;
+      const palette = [];
+      while (palette.length < paletteSize) {
+        const c = randomColor();
+        if (!palette.includes(c)) palette.push(c);
+      }
+      colors = shape.map(() => palette[Math.floor(Math.random() * palette.length)]);
     } else {
       const c = randomColor();
       colors = shape.map(() => c);
