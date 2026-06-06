@@ -398,7 +398,7 @@
 <div class="trash-indicator" id="trash-indicator">🗑 Click a tile color to remove ALL of that color</div>
 
 <!-- VERSION TAG -->
-<div id="version-tag">v3</div>
+<div id="version-tag">v4</div>
 
 <!-- GAME -->
 <div id="game-wrap">
@@ -628,8 +628,9 @@ function generateOneBlock(fillRatio) {
   const allowed = SHAPES.filter(s => s.length <= maxCells);
 
   // Size bias: on an empty board big blocks are favored (weight = size^2.5),
-  // as the board fills the curve flips to favor small blocks.
-  const exp = -2.5 + 6.0 * fillRatio;       // empty ~ -2.5, full ~ +2.6
+  // as the board fills the curve flips to favor small blocks. The 7.3 slope
+  // eases the mid-fill phase a bit (board no longer fills as fast).
+  const exp = -2.5 + 7.3 * fillRatio;       // empty ~ -2.5, full ~ +3.7
   const weights = allowed.map(s => Math.pow(s.length, -exp));
   const totalWeight = weights.reduce((a, b) => a + b, 0);
 
