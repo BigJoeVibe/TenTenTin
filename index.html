@@ -110,19 +110,19 @@
   }
   .score-val {
     font-family: 'Orbitron', monospace;
-    font-size: 2.1rem; font-weight: 900; color: var(--text);
+    font-size: 1.25rem; font-weight: 700; color: var(--text);
     line-height: 1;
-    text-shadow: 0 0 12px rgba(226,232,240,0.25);
     transition: transform 0.1s;
     transform-origin: center;
   }
-  .score-val.best { color: var(--accent); text-shadow: 0 0 14px rgba(6,214,160,0.45); }
-  #score-display.score-pop {
-    animation: scorePop 0.55s cubic-bezier(.3,1.6,.5,1);
+  .score-val.best { color: var(--accent); }
+  /* small pulse used ONLY when a Mambo/Rambo bonus lands */
+  #score-display.score-pop-small {
+    animation: scorePopSmall 0.4s ease;
   }
-  @keyframes scorePop {
-    0% { transform: scale(1); color: var(--text); }
-    35% { transform: scale(1.55); color: var(--accent); text-shadow: 0 0 22px rgba(6,214,160,0.9); }
+  @keyframes scorePopSmall {
+    0% { transform: scale(1); }
+    45% { transform: scale(1.16); color: var(--accent); }
     100% { transform: scale(1); color: var(--text); }
   }
   #pause-btn {
@@ -439,39 +439,60 @@
   .combo-flash {
     position: fixed; top: 40%; left: 50%;
     transform: translate(-50%, -50%);
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
     font-family: 'Orbitron', monospace;
     font-weight: 900;
-    font-size: clamp(2.2rem, 10vw, 3.6rem);
     letter-spacing: 1px;
     pointer-events: none;
     z-index: 850;
     white-space: nowrap;
-    -webkit-text-stroke: 1px rgba(0,0,0,0.35);
     animation: comboFlash 1.3s ease forwards;
+  }
+  .cf-label { font-size: clamp(2rem, 9vw, 3.2rem); -webkit-text-stroke: 1px rgba(0,0,0,0.35); }
+  .cf-pts {
+    font-size: clamp(3rem, 14vw, 5rem);
+    -webkit-text-stroke: 1.5px rgba(0,0,0,0.4);
+    animation: ptsPop 1.1s ease;
+  }
+  @keyframes ptsPop {
+    0% { transform: scale(0.3); opacity: 0; }
+    40% { transform: scale(1.35); opacity: 1; }
+    60% { transform: scale(1); }
+    100% { transform: scale(1.05); }
   }
   .flash-mambo {
     color: var(--accent);
-    text-shadow: 0 0 10px rgba(6,214,160,0.95), 0 0 26px rgba(6,214,160,0.8), 0 0 48px rgba(6,214,160,0.6);
+    text-shadow: 0 0 12px rgba(6,214,160,0.95), 0 0 30px rgba(6,214,160,0.85), 0 0 60px rgba(6,214,160,0.6);
   }
   .flash-rambo {
     color: var(--c-purple);
-    text-shadow: 0 0 10px rgba(191,128,255,0.95), 0 0 26px rgba(191,128,255,0.8), 0 0 48px rgba(191,128,255,0.6);
+    text-shadow: 0 0 12px rgba(191,128,255,0.95), 0 0 30px rgba(191,128,255,0.85), 0 0 60px rgba(191,128,255,0.6);
   }
-  /* Big celebration flash for earning a special stone */
-  .flash-big {
-    font-size: clamp(2.8rem, 12vw, 4.4rem);
-    -webkit-text-stroke: 1.5px rgba(0,0,0,0.4);
-  }
+  .flash-big .cf-label { font-size: clamp(2.8rem, 13vw, 4.6rem); }
   .flash-stone {
     color: #fff;
-    text-shadow: 0 0 12px #fff, 0 0 30px var(--accent), 0 0 60px var(--c-purple), 0 0 90px var(--c-blue);
+    text-shadow: 0 0 14px #fff, 0 0 34px var(--accent), 0 0 64px var(--c-purple), 0 0 100px var(--c-blue);
   }
   @keyframes comboFlash {
     0% { opacity: 0; transform: translate(-50%,-50%) scale(0.35) rotate(-5deg); }
-    18% { opacity: 1; transform: translate(-50%,-50%) scale(1.22) rotate(2deg); }
-    32% { transform: translate(-50%,-50%) scale(1) rotate(0deg); }
-    78% { opacity: 1; transform: translate(-50%,-50%) scale(1.04); }
+    14% { opacity: 1; transform: translate(-50%,-50%) scale(1.2) rotate(2deg); }
+    26% { transform: translate(-50%,-50%) scale(1) rotate(0deg); }
+    82% { opacity: 1; transform: translate(-50%,-50%) scale(1.04); }
     100% { opacity: 0; transform: translate(-50%,-54%) scale(0.92); }
+  }
+
+  /* Little yellow stars around the flash */
+  .star {
+    position: fixed; pointer-events: none; z-index: 849;
+    color: #ffe23a;
+    text-shadow: 0 0 6px rgba(255,226,58,0.95), 0 0 12px rgba(255,200,0,0.7);
+    transform: translate(-50%, -50%);
+    animation: starTwinkle 1.2s ease forwards;
+  }
+  @keyframes starTwinkle {
+    0% { opacity: 0; transform: translate(-50%,-50%) scale(0.2) rotate(0deg); }
+    30% { opacity: 1; transform: translate(calc(-50% + var(--sx)), calc(-50% + var(--sy))) scale(1.1) rotate(45deg); }
+    100% { opacity: 0; transform: translate(calc(-50% + var(--sx)), calc(-50% + var(--sy))) scale(0.5) rotate(120deg); }
   }
 
   /* Discreet version tag */
@@ -524,7 +545,7 @@
 <div class="trash-indicator" id="trash-indicator">🗑 Click a tile color to remove ALL of that color</div>
 
 <!-- VERSION TAG -->
-<div id="version-tag">v6</div>
+<div id="version-tag">v7</div>
 
 <!-- GAME -->
 <div id="game-wrap">
@@ -1328,18 +1349,19 @@ function handleComboBonuses(removed) {
     score += 5;
     mamboCount++;
     if (mamboCount >= 20) { mamboCount -= 20; if (awardBonusStone()) earned = true; }
-    queueFlash('Mambo No. 5', 'flash-mambo', 1300);
+    queueFlash('Mambo No. 5', 'flash-mambo', 1800, '+5');
   }
   if (rambo) {
     score += 10;
     ramboCount++;
     if (ramboCount >= 10) { ramboCount -= 10; if (awardBonusStone()) earned = true; }
-    queueFlash('Color Rambo', 'flash-rambo', 1300);
+    queueFlash('Color Rambo', 'flash-rambo', 1800, '+10');
   }
   if (mambo || rambo) {
     renderBonusBar();
     if (mambo) pulseEl(document.querySelector('.prog-mambo'), 'bump', 620);
     if (rambo) pulseEl(document.querySelector('.prog-rambo'), 'bump', 620);
+    pulseEl(document.getElementById('score-display'), 'score-pop-small', 400);
     if (earned) celebrateStone();
   }
 }
@@ -1353,11 +1375,12 @@ function awardBonusStone() {
 
 // Big celebration when a new stone is earned (longer, flashier)
 function celebrateStone() {
-  queueFlash('★ BONUS STONE ★', 'flash-big flash-stone', 1900);
+  queueFlash('★ BONUS STONE ★', 'flash-big flash-stone', 2400);
   const slots = document.getElementById('stone-slots');
   if (!slots) return;
   const rect = slots.getBoundingClientRect();
-  burstAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 24);
+  burstAt(rect.left + rect.width / 2, rect.top + rect.height / 2, 28);
+  spawnStars(rect.left + rect.width / 2, rect.top + rect.height / 2, 16, 1400);
   const stoneEls = slots.querySelectorAll('.stone:not(.stone-empty)');
   const last = stoneEls[stoneEls.length - 1];
   if (last) pulseEl(last, 'stone-earn', 1500);
@@ -1390,7 +1413,7 @@ function placeSpecialStone(r, c, stone) {
     const er = board2screen(r, c);
     if (er) burstAt(er.x, er.y, 20);
     score += removed.length + 10;         // erased tiles + eraser bonus
-    queueFlash('ERASER!', 'flash-big flash-rambo', 1500);
+    queueFlash('ERASER!', 'flash-big flash-rambo', 1800, '+10');
   } else {
     // Chameleon: recolor the majority color among the 8 neighbors to its color.
     const chamColor = stone.chamColor || randomColor();
@@ -1428,7 +1451,7 @@ function placeSpecialStone(r, c, stone) {
     if (removed.length) spawnParticles(removed, true);
     const cs = board2screen(r, c);
     if (cs) burstAt(cs.x, cs.y, 20);
-    queueFlash('CHAMELEON!', 'flash-big flash-mambo', 1500);
+    queueFlash('CHAMELEON!', 'flash-big flash-mambo', 1800, '+5');
   }
 
   // Cooldown ticks like a normal move? No - stones are a free action.
@@ -1490,20 +1513,49 @@ function burstAt(x, y, count) {
   for (let i = 0; i < count; i++) emitParticle(x, y, cols[i % cols.length], true);
 }
 
-function queueFlash(text, cls, dur) {
-  flashQueue.push({text, cls, dur: dur || 1200});
+function queueFlash(text, cls, dur, pts) {
+  flashQueue.push({text, cls, dur: dur || 1200, pts});
   if (!flashRunning) runFlashQueue();
 }
 function runFlashQueue() {
   if (flashQueue.length === 0) { flashRunning = false; return; }
   flashRunning = true;
-  const {text, cls, dur} = flashQueue.shift();
+  const {text, cls, dur, pts} = flashQueue.shift();
   const el = document.createElement('div');
   el.className = 'combo-flash ' + (cls || '');
-  el.textContent = text;
   el.style.animationDuration = dur + 'ms';
+  const label = document.createElement('div');
+  label.className = 'cf-label';
+  label.textContent = text;
+  el.appendChild(label);
+  if (pts) {
+    const p = document.createElement('div');
+    p.className = 'cf-pts';
+    p.textContent = pts;
+    el.appendChild(p);
+  }
   document.body.appendChild(el);
+  spawnStars(window.innerWidth / 2, window.innerHeight * 0.40, 14, Math.min(dur, 1400));
   setTimeout(() => { el.remove(); runFlashQueue(); }, dur);
+}
+
+// Little yellow stars twinkling around a screen point
+function spawnStars(cx, cy, count, dur) {
+  for (let i = 0; i < count; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    s.textContent = '★';
+    s.style.left = cx + 'px';
+    s.style.top = cy + 'px';
+    const ang = Math.random() * Math.PI * 2;
+    const rad = 45 + Math.random() * 140;
+    s.style.setProperty('--sx', (Math.cos(ang) * rad) + 'px');
+    s.style.setProperty('--sy', (Math.sin(ang) * rad * 0.6) + 'px');
+    s.style.fontSize = (9 + Math.random() * 12) + 'px';
+    s.style.animationDuration = (dur || 1200) + 'ms';
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), dur || 1200);
+  }
 }
 
 // ============================================================
@@ -1734,10 +1786,9 @@ function pulseEl(el, cls, dur) {
 }
 
 function updateScore() {
-  const el = document.getElementById('score-display');
-  const prev = parseInt(el.textContent) || 0;
-  el.textContent = score;
-  if (score > prev) pulseEl(el, 'score-pop', 560);
+  // Main score is intentionally NOT animated on every gain - only a small pulse
+  // on Mambo/Rambo bonuses (triggered from handleComboBonuses).
+  document.getElementById('score-display').textContent = score;
   if (score > best) {
     best = score;
     localStorage.setItem('cmBest', best);
